@@ -977,10 +977,23 @@ class Connection(metaclass=ConnectionMeta):
                                      schema='public', codec_name):
         """Set a builtin codec for the specified data type.
 
-        :param typename:  Name of the data type the codec is for.
-        :param schema:  Schema name of the data type the codec is for
-                        (defaults to 'public')
-        :param codec_name:  The name of the builtin codec.
+        :param typename:
+            Name of the data type the codec is for.
+
+        :param schema:
+            Schema name of the data type the codec is for
+            (defaults to ``'public'``).
+
+        :param codec_name:
+            The name of the builtin codec to use for the type.
+            This should be either the name of a known core type
+            (such as ``"int"``), or the name of a supported extension
+            type.  Currently, the only supported extension type is
+            ``"pg_contrib.hstore"``.
+
+        .. versionchanged:: 0.17.0
+            The *codec_name* argument can be the name of any known
+            core data type.
         """
         self._check_open()
 
@@ -989,11 +1002,12 @@ class Connection(metaclass=ConnectionMeta):
         if not typeinfo:
             raise ValueError('unknown type: {}.{}'.format(schema, typename))
 
-        oid = typeinfo['oid']
-        if typeinfo['kind'] != b'b' or typeinfo['elemtype']:
+        if not introspection.is_scalar_type(typeinfo):
             raise ValueError(
                 'cannot alias non-scalar type {}.{}'.format(
                     schema, typename))
+
+        oid = typeinfo['oid']
 
         self._protocol.get_settings().set_builtin_type_codec(
             oid, typename, schema, 'scalar', codec_name)

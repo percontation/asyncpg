@@ -487,9 +487,9 @@ class TestCodecs(tb.ConnectedTestCase):
             self.assertEqual(at[0].type.name, intname)
 
     async def test_all_builtin_types_handled(self):
-        from asyncpg.protocol.protocol import TYPEMAP
+        from asyncpg.protocol.protocol import BUILTIN_TYPE_OID_MAP
 
-        for oid, typename in TYPEMAP.items():
+        for oid, typename in BUILTIN_TYPE_OID_MAP.items():
             codec = self.con.get_settings().get_data_codec(oid)
             self.assertIsNotNone(
                 codec,
@@ -941,10 +941,20 @@ class TestCodecs(tb.ConnectedTestCase):
     async def test_extra_codec_alias(self):
         """Test encoding/decoding of a builtin non-pg_catalog codec."""
         await self.con.execute('''
-            CREATE EXTENSION IF NOT EXISTS hstore
+            CREATE DOMAIN my_int_t AS smallint;
+            CREATE EXTENSION IF NOT EXISTS hstore;
         ''')
 
         try:
+            await self.con.set_builtin_type_codec(
+                'my_int_t', codec_name='int2')
+
+            res = await self.con.fetchval('''
+                SELECT $1::my_int_t AS result
+            ''', 44)
+
+            self.assertEqual(res, 44)
+
             await self.con.set_builtin_type_codec(
                 'hstore', codec_name='pg_contrib.hstore')
 
@@ -975,7 +985,8 @@ class TestCodecs(tb.ConnectedTestCase):
 
         finally:
             await self.con.execute('''
-                DROP EXTENSION hstore
+                DROP EXTENSION hstore;
+                DROP DOMAIN my_int_t;
             ''')
 
     async def test_custom_codec_text(self):
